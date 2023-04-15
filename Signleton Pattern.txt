@@ -1,0 +1,24 @@
+Singleton :- 
+
+Note: Apple uses this approach a lot. For example: UserDefaults.standard, UIApplication.shared, UIScreen.main, FileManager.default all return a Singleton object.
+
+
+Observer Pattern:- 
+
+Notifications are heavily used by Apple. For example, when the keyboard is shown/hidden the system sends a UIKeyboardWillShow/UIKeyboardWillHide, respectively. When your app goes to the background, the system sends a UIApplicationDidEnterBackground notification.
+
+KVO:- examples:- ?Mukti:- 
+
+
+
+Facede:- 
+
+How to Use the Facade Pattern
+Currently you have PersistencyManager to save the album data locally and HTTPClient to handle the remote communication. The other classes in your project should not be aware of this logic, as they will be hiding behind the facade of LibraryAPI.
+
+To implement this pattern, only LibraryAPI should hold instances of PersistencyManager and HTTPClient. Then, LibraryAPI will expose a simple API to access those services.
+
+
+The Decorator Design Pattern:- 
+Extensions
+Delegation

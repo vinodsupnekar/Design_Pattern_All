@@ -1,0 +1,218 @@
+VIPER 
+https://betterprogramming.pub/how-to-implement-viper-architecture-in-your-ios-app-rest-api-and-kingfisher-f494a0891c43 
+
+Let’s Define a VIPER Module
+A typical VIPER Module consists of five components: View, Interactor, Presenter, Entity, and Router. Here is a short description of what each component does:
+		
+View is passive and doesn't do much on its own. Its sole responsibility is to message events to the presenter and display UI elements.
+		
+Interactor is a UIKit-independent component that performs all business logic. For example, in our app, it uses Services to communicate with the REST API in order to obtain image data from an URL.
+		
+Presenter is also UIKit-independent. It receives messages from the view and decides whether to send messages to the interactor or the router. It also receives the data from the interactor and prepares it for the view to display in the suitable format.
+		
+Entity is a plain model that’s used by the interactor
+		
+Router, in our app, is responsible for creating a particular module and navigating from one module to another
+
+
+First, we should define the contract (five protocols in our case) according to which VIPER components will interact with each other.
+
+QuoteContract.swift:- 
+
+import UIKit
+
+// MARK: View Input (View -> Presenter)
+protocol ViewToPresenterQuotesProtocol {
+var view: PresenterToViewQuotesProtocol? { get set }
+var interactor: PresenterToInteractorQuotesProtocol? { get set }
+var router: PresenterToRouterQuotesProtocol? { get set }
+var quotesStrings: [String]? { get set }
+func viewDidLoad()
+func refresh()
+func numberOfRowsInSection() -> Int
+func textLabelText(indexPath: IndexPath) -> String?
+func didSelectRowAt(index: Int)
+func deselectRowAt(index: Int)
+}
+
+// MARK: View Output (Presenter -> View)
+protocol PresenterToViewQuotesProtocol {
+func onFetchQuotesSuccess()
+func onFetchQuotesFailure(error: String)
+func showHUD()
+func hideHUD()
+func deselectRowAt(row: Int)
+}
+
+// MARK: Interactor Input (Presenter -> Interactor)
+protocol PresenterToInteractorQuotesProtocol {
+var presenter: InteractorToPresenterQuotesProtocol? { get set }
+func loadQuotes()
+func retrieveQuote(at index: Int)
+}
+
+// MARK: Interactor Output (Interactor -> Presenter)
+protocol InteractorToPresenterQuotesProtocol {
+func fetchQuotesSuccess(quotes: [APIQuote])
+func fetchQuotesFailure(errorCode: Int)
+func getQuoteSuccess(_ quote: APIQuote)
+func getQuoteFailure()
+}
+
+// MARK: Router Input (Presenter -> Router)
+protocol PresenterToRouterQuotesProtocol {
+static func createModule() -> UINavigationController
+func pushToQuoteDetail(on view: PresenterToViewQuotesProtocol, with quote: APIQuote)
+}
+
+
+1. View input (ViewToPresenterQuotesProtocol): Presenter should conform to that protocol. Presenter receives messages from the view and tells the interactor what it should do.
+
+class QuotesPresenter: ViewToPresenterQuotesProtocol {
+    
+    // MARK: Properties
+    weak var view: PresenterToViewQuotesProtocol?
+    var interactor: PresenterToInteractorQuotesProtocol?
+    var router: PresenterToRouterQuotesProtocol?
+    
+    var quotesStrings: [String]?
+    
+    // MARK: Inputs from view
+    func viewDidLoad() {
+        print("Presenter is being notified that the View was loaded.")
+        view?.showHUD()
+        interactor?.loadQuotes()
+    }
+  ....
+}
+
+
+2. View output (PresenterToViewQuotesProtocol): The ViewController should conform to that protocol. The view receives the operation result from the presenter and acts accordingly to its logic:
+
+
+extension QuotesViewController: PresenterToViewQuotesProtocol{
+    
+    func onFetchQuotesSuccess() {
+        print("View receives the response from Presenter and updates itself.")
+        self.tableView.reloadData()
+        self.refreshControl.endRefreshing()
+    }
+    
+    func onFetchQuotesFailure(error: String) {
+        print("View receives the response from Presenter with error: \(error)")
+        self.refreshControl.endRefreshing()
+    }
+    
+    func showHUD() {
+        HUD.show(.progress, onView: self.view)
+    }
+    
+    func hideHUD() {
+        HUD.hide()
+    }
+    
+    func deselectRowAt(row: Int) {
+        self.tableView.deselectRow(at: IndexPath(row: row, section: 0), animated: true)
+    }
+    
+}
+
+
+3. Interactor input (PresenterToInteractorQuotesProtocol): 
+
+The interactor should conform to that protocol. Here’s the workflow: In the view, we notify the presenter some event happened (e.g., viewDidLoad). The presenter, in its order, tells the interactor it should perform a certain task (e.g., loadQuotes). After the task’s completed, the interactor forwards the result back to presenter.
+
+
+import Foundation
+
+class QuotesInteractor: PresenterToInteractorQuotesProtocol {
+    
+    // MARK: Properties
+    weak var presenter: InteractorToPresenterQuotesProtocol?
+    var quotes: [APIQuote]?
+    
+    func loadQuotes() {
+        print("Interactor receives the request from Presenter to load quotes from the server.")
+        QuoteService.shared.getQuotes(count: 10, success: { (code, quotes) in
+            self.quotes = quotes
+            self.presenter?.fetchQuotesSuccess(quotes: quotes)
+        }) { (code) in
+            self.presenter?.fetchQuotesFailure(errorCode: code)
+        }
+    }
+    
+    func retrieveQuote(at index: Int) {
+        guard let quotes = self.quotes, quotes.indices.contains(index) else {
+            self.presenter?.getQuoteFailure()
+            return
+        }
+        self.presenter?.getQuoteSuccess(self.quotes![index])
+    }
+
+}
+
+
+4. Interactor output (InteractorToPresenterQuotesProtocol): The presenter should conform to that protocol. These methods are called in the interactor input after the interactor completes its task (as seen above). After receiving of a task from the interactor, the presenter prepares the received data in the displayable format for the view and sends messages to it. What the view does in these result methods (onFetchQuotesSuccess, onFetchQuotesFailure) is shown in view output above.
+
+
+extension QuotesPresenter: InteractorToPresenterQuotesProtocol {
+    
+    func fetchQuotesSuccess(quotes: [APIQuote]) {
+        print("Presenter receives the result from Interactor after it's done its job.")
+        self.quotesStrings = quotes.compactMap { $0.quote }
+        view?.hideHUD()
+        view?.onFetchQuotesSuccess()
+    }
+    
+    func fetchQuotesFailure(errorCode: Int) {
+        print("Presenter receives the result from Interactor after it's done its job.")
+        view?.hideHUD()
+        view?.onFetchQuotesFailure(error: "Couldn't fetch quotes: \(errorCode)")
+    }
+    
+    func getQuoteSuccess(_ quote: APIQuote) {
+        router?.pushToQuoteDetail(on: view!, with: quote)
+    }
+    
+    func getQuoteFailure() {
+        view?.hideHUD()
+        print("Couldn't retrieve quote by index")
+    }
+    
+    
+}
+
+5. Router input (PresenterToRouterQuotesProtocol): The router conforms to that protocol. The router creates the quote module and configures the dependencies. It waits for the command from the presenter to navigate to another screen, passing the selected quote as a parameter:
+
+import UIKit
+
+class QuotesRouter: PresenterToRouterQuotesProtocol {
+    
+    // MARK: Static methods
+    static func createModule() -> UINavigationController {
+        
+        print("QuotesRouter creates the Quotes module.")
+        let viewController = QuotesViewController()
+        let navigationController = UINavigationController(rootViewController: viewController)
+        
+        let presenter: ViewToPresenterQuotesProtocol & InteractorToPresenterQuotesProtocol = QuotesPresenter()
+        
+        viewController.presenter = presenter
+        viewController.presenter?.router = QuotesRouter()
+        viewController.presenter?.view = viewController
+        viewController.presenter?.interactor = QuotesInteractor()
+        viewController.presenter?.interactor?.presenter = presenter
+        
+        return navigationController
+    }
+    
+    // MARK: - Navigation
+    func pushToQuoteDetail(on view: PresenterToViewQuotesProtocol, with quote: APIQuote) {
+        print("QuotesRouter is instructed to push QuoteDetailViewController onto the navigation stack.")
+        let quoteDetailViewController = QuoteDetailRouter.createModule(with: quote)
+            
+        let viewController = view as! QuotesViewController
+        viewController.navigationController?
+            .pushViewController(quoteDetailViewController, animated: true)
+    }
+}

@@ -1,0 +1,35 @@
+
+1. Structural Design patterns
+ How objects are composed and combined to form large structures.
+	MVC MVVM FACADE
+
+2. Behavioural :- 
+	How objects communicate each other.
+	E.g. Delegation Strategy and Observer.
+
+3. Creational 
+	Instantiating Objects.
+E.g. Singleton , Builder Prototype.
+
+
+
+Class Diagram:- added to Evernote
+
+MVC:- used in UIKit
+1.  Model :- app data using structs and/ Or classes 
+	Communicate to View controllers via property observers.
+
+2. View :- handles ui elements directly
+	Communicate to View controllers via IBActions
+
+3. View controller:- Manages View and Models directly , has strong reference (owns)to it.
+
+
+
+
+Delegate:- 
+
+The delegation pattern allows an object to use a helper object to perform a task, instead of doing the task itself.
+
+
+Strategy:	
